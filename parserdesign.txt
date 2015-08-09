@@ -1,0 +1,15 @@
+CixParser structure
+Input: A text file consisting of valid Cix code
+Output: An object containing parse trees for each statement, as well as source file info
+Parse trees are contained in Blocks
+There is a Block for the whole source file, with child blocks for each function def, struct def, or control flow thing (if, while, switch, for)
+A Node is an element of the parse tree, with 0-2 children
+Parser takes input source line by line and feeds it to lexer
+Lexer splits text into a token stream, providing tokens on the parser's request
+Lexer recognizes all elements of the language, including comment delimiters and preprocessor stuff
+
+**For every(?) type of structure in the code (statements, function definitions, variable inits, etc) there is a function in the 
+parser for handling that structure**
+**These functions are called when the parser can tell, by examining the tokens, which structure it's parsing.**
+
+Month of Zen Jan 19 2006 (Jul 14 circa 2:00 PM): New Horizons mentioned!

@@ -11,7 +11,8 @@ class Token
 end
 
 class Lexer
-	@@reserved_words = "break case char const continue do double else float for goto if int long return short sizeof struct void while".split(' ')
+	@@reserved_words = "break case char const continue do double else float for goto if int long register return short sizeof struct void while".split(' ')
+	attr_reader :reserved_words
 	attr_accessor :lineno, :source, :tok_start, :cur
 	def initialize
 		@lineno = 0
@@ -20,18 +21,61 @@ class Lexer
 		@cur = 0
 	end
 	
-# The parser usually ignores whitespace, but since, say method(vars) is valid function call syntax while method  (vars ) isn't,
-# the parser sometimes needs to check. 
- def get_token(skip_whitespace=1)
+ def get_token()
+	nexttoken = Token.new
+	while @source[@lineno][@cur]
+		case @source[@lineno][@cur]
+			when '0'
+			when '1'
+			when '2'
+			when '3'
+			when '4'
+			when '5'
+			when '6'
+			when '7'
+			when '8'
+			when '9'
+				@tok_start = @cur
+				@cur+=1 while @source[@lineno][@cur] =~ /\d/
+				nexttoken::type = 'number'
+				if @source[@lineno][@cur] == 'u'
+					if @source[@lineno][@cur+1] == 'l'
+						@cur+=2
+					else
+						@cur+=1
+					end
+				elsif (@source[@lineno][@cur] == 'f' || @source[@lineno][@cur] == 'd')
+					@cur+=1
+				end
+				nexttoken::value = @source[@lineno][@cur].to_i
+				return nexttoken
+		end
+	end
+ end
+ 
+ def get_token_old()
 		t = Token.new
-		while (skip_whitespace && (@source[@lineno][@cur]) =~ /\s/) #should match newlines too
+		while (@source[@lineno][@cur]) =~ /\s/ #should match newlines too
 			@cur+=1
 		end
 		if @source[@lineno][@cur].nil? #probably change to empty?
-			t::type = 'end'
-			return t
+			if @source[@lineno+1]
+				@lineno+=1
+				@cur = 0
+			else
+				t::type = 'end'
+				return t
+			end
 		end
 		@tok_start = @cur
+		if @source[@lineno][@cur..@cur+1] == '/*'
+			
+		end
+		if @source[@lineno][@cur..@cur+1] == '//'
+			@lineno+=1
+			@cur = 0
+			return get_token
+		end
 		if (@source[@lineno][@cur]) =~ /[A-Za-z_]/
 			@@reserved_words.each do |word|
 				if (@source[@lineno][@cur..@cur+word.length-1] == word && @source[@lineno][@cur+word.length-1] > 'z') #to check that it's the end of the name
@@ -47,6 +91,8 @@ class Lexer
 			t::type = 'name'
 			t::value = @source[@lineno][@tok_start..@cur-1]
 			return t #since @cur is already incremented to point to the next char, we return early
+		end
+		if (@source[@lineno][@cur]) =~ /\d/ # Only ints for now
 				@cur+=1
 			while @source[@lineno][@cur] =~ /\d/
 				@cur+=1
@@ -129,6 +175,7 @@ class Block
 		raise "Variable '%s' not defined..." % name
 	end
 end
+
 class Parser
 	@@symtab = {} # Contains all the valid language tokens.  I'm not entirely sure about declaring it a class var
 	def self.symtab
@@ -208,6 +255,9 @@ class Parser
 		sym	
 	end
 	
+	@tokenizer::reserved_words.each do |keyword| # add all keywords
+		symbol(keyword)
+	end
 	symbol('{')
 	symbol('}')
 	symbol(';')
@@ -282,12 +332,8 @@ class Parser
 				when 'name'
 					nextnode = @@symtab['name'].clone
 					nextnode::left = @token::value
-				when 'func'
-					nextnode = @@symtab['func'].clone
-					nextnode::left = @token::value
-				when 'while'
-					nextnode = @@symtab['while'].clone
-					nextnode::left = @token::value
+				when 'keyword'
+					nextnode = @@symtab[@token::value].clone
 				when 'end'
 					nextnode = @@symtab['end'].clone
 			end
@@ -314,9 +360,11 @@ class Parser
 		end
 		left
 	end
+	
+	def statement
 		expect
-		tree = expression 0
-		expect ';'
-		tree
+		case @node
+			when ''
+		end
 	end
 end
