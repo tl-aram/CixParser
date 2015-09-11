@@ -10,106 +10,60 @@ class Token
 	end
 end
 
+
 class Lexer
-	@@reserved_words = "break case char const continue do double else float for goto if int long register return short sizeof struct void while".split(' ')
-	attr_reader :reserved_words
-	attr_accessor :lineno, :source, :tok_start, :cur
-	def initialize
+	
+	# _srcfile: An open IO object, which is either a file or stdin.
+	def initialize(_srcfile)
+		@srcfile = _srcfile
+		if $live
+			@src = [ @srcfile.readline.chomp ]
+		else
+			@src = _srcfile.read.split("\n")
+		end
 		@lineno = 0
-		@source = [ ]
+		@linepos = 0
 		@tok_start = 0
-		@cur = 0
 	end
 	
- def get_token()
-	nexttoken = Token.new
-	while @source[@lineno][@cur]
-		case @source[@lineno][@cur]
-			when '0'
-			when '1'
-			when '2'
-			when '3'
-			when '4'
-			when '5'
-			when '6'
-			when '7'
-			when '8'
-			when '9'
-				@tok_start = @cur
-				@cur+=1 while @source[@lineno][@cur] =~ /\d/
-				nexttoken::type = 'number'
-				if @source[@lineno][@cur] == 'u'
-					if @source[@lineno][@cur+1] == 'l'
-						@cur+=2
-					else
-						@cur+=1
-					end
-				elsif (@source[@lineno][@cur] == 'f' || @source[@lineno][@cur] == 'd')
-					@cur+=1
-				end
-				nexttoken::value = @source[@lineno][@cur].to_i
-				return nexttoken
-		end
-	end
- end
- 
- def get_token_old()
+	# Builds the next token from the input stream.
+	def get_token
 		t = Token.new
-		while (@source[@lineno][@cur]) =~ /\s/ #should match newlines too
-			@cur+=1
+		while (@src[@lineno][@linepos] == ' ') ||
+		      (@src[@lineno][@linepos] == '\t') ||
+					(@src[@lineno][@linepos] == '\r') ||
+					(@src[@lineno][@linepos] == '\n')
+		@linepos+=1
 		end
-		if @source[@lineno][@cur].nil? #probably change to empty?
-			if @source[@lineno+1]
-				@lineno+=1
-				@cur = 0
-			else
-				t::type = 'end'
-				return t
-			end
-		end
-		@tok_start = @cur
-		if @source[@lineno][@cur..@cur+1] == '/*'
-			
-		end
-		if @source[@lineno][@cur..@cur+1] == '//'
-			@lineno+=1
-			@cur = 0
-			return get_token
-		end
-		if (@source[@lineno][@cur]) =~ /[A-Za-z_]/
-			@@reserved_words.each do |word|
-				if (@source[@lineno][@cur..@cur+word.length-1] == word && @source[@lineno][@cur+word.length-1] > 'z') #to check that it's the end of the name
-					@cur+=word.length
-					t::type = 'keyword'
-					t::value = @source[@lineno][@tok_start..@cur+word.length-1]
-					return t
+		@tok_start = @linepos
+		# @linepos has already been set to point to the next token
+		case @src[@lineno][@linepos]
+			when /[0-9]+/
+				t::type = :Number
+				/(?<number_value>[0-9]+)/ =~ @src[@lineno][@linepos..-1]
+				t::value = number_value
+				@linepos += number_value.length
+			when /[A-Za-z_]/
+				t::type = :Name
+				/(?<name_value>[A-Za-z_]+)/ =~ @src[@lineno][@linepos..-1]
+				t::value = name_value
+				@linepos += name_value.length
+			when /[\+\-\*\/]/ # operators
+				t::type = :Operator
+				t::value = @src[@lineno][@linepos]
+				@linepos+=1
+			when nil # EOL/F
+				if $live
+					@src << @srcfile.readline.chomp # fix later
 				end
-			end
-			while @source[@lineno][@cur] =~ /A-Za-z_/
-				@cur+=1
-			end
-			t::type = 'name'
-			t::value = @source[@lineno][@tok_start..@cur-1]
-			return t #since @cur is already incremented to point to the next char, we return early
-		end
-		if (@source[@lineno][@cur]) =~ /\d/ # Only ints for now
-				@cur+=1
-			while @source[@lineno][@cur] =~ /\d/
-				@cur+=1
-			end
-			t::type = 'number'
-			t::value = @source[@lineno][@tok_start..@cur-1]
-			return t
-		end
-		# A method for tokenizing the comparison operators <=, == >= !=, as well as compound assignment operators
-		def compsym(sym)
-			if @source[@lineno][@cur.next] == '='
-				@cur+=1
-				sym + '='
+				@lineno+=1
+				@linepos = @tok_start = 0
+				t::type = :End
 			else
-				sym
-			end
+				raise "Bad input '#{ @src[@lineno][@linepos] }' at line #{ @lineno }, column #{ @linepos }\n"
 		end
+		return t
+	end
 end
 
 class Node #I actually forgot there was an existing Symbol class, and tried to call it that, not knowing why I was getting errors
@@ -183,8 +137,8 @@ class Parser
 	end
 
 	attr_accessor :node, :sav, :tokenizer #done to get parentheses working.  Fix later
-	def initialize
-		@tokenizer = Lexer.new
+	def initialize(_src)
+		@tokenizer = Lexer.new(_src)
 		@token = nil
 		@blocklevel = 0
 		@node = nil
@@ -207,8 +161,8 @@ class Parser
 		if nud
 			sym::nud = nud
 		else
-			sym::nud = Proc.new do |node|
-				node::left = $i::parser.expression bp
+			sym::nud = Proc.new do |node, parser|
+				node::left = parser.expression bp
 				node
 			end
 		end
@@ -220,9 +174,9 @@ class Parser
 		if led
 			sym::led = led
 		else
-			sym::led = Proc.new do |node, left|
+			sym::led = Proc.new do |node, left, parser|
 				node::left = left
-				node::right = $i::parser.expression bp
+				node::right = parser.expression bp
 				node
 			end
 			sym
@@ -234,9 +188,9 @@ class Parser
 		if led
 			sym::led = led
 		else
-			sym::led = Proc.new do |node, left|
+			sym::led = Proc.new do |node, left, parser|
 				node::left = left
-				node::right = $i::parser.expression bp-1
+				node::right = parser.expression bp-1
 				node
 			end
 		end
@@ -248,16 +202,16 @@ class Parser
 		if led
 			sym::led = led
 		else
-			sym::led = Proc.new do |node, left|
+			sym::led = Proc.new do |node, left, parser|
 				# fill in
 			end
 		end
 		sym	
 	end
 	
-	@tokenizer::reserved_words.each do |keyword| # add all keywords
-		symbol(keyword)
-	end
+	#@tokenizer::reserved_words.each do |keyword| # add all keywords
+	#	symbol(keyword)
+	#end ...later
 	symbol('{')
 	symbol('}')
 	symbol(';')
@@ -270,7 +224,7 @@ class Parser
 		$i::parser.expect ')'
 		node
 	end
-	infix('(', 80) do |node, left| #for function calls
+	infix_left('(', 80) do |node, left| #for function calls
 		raise 'Function called with bad name' if left::id != 'name'
 		node::left = left
 		node::right = $i::parser::expression 0
@@ -278,26 +232,26 @@ class Parser
 		node
 	end
 	symbol(')')
-	infix(',', 5)
-	infixr('=', 10) do |node, left|
+	infix_left(',', 5)
+	infix_right('=', 10) do |node, left|
 		raise 'Left side of \'=\' not an lvalue' if left::id != 'name'
 		node::left = left
 		node::right = $i::parser.expression 9
 		node
 	end
-	infixr('&', 30)
-	infixr('|', 30)
-	infix('>', 40)
-	infix('<', 40)
-	infix('<=', 40)
-	infix('==', 40)
-	infix('!=', 40)
-	infix('>=', 40)
-	infix('+', 50)
-	infix('-', 50)
-	infix('*', 60)
-	infix('/', 60)
-	infix('%', 60)
+	infix_right('&', 30)
+	infix_right('|', 30)
+	infix_left('>', 40)
+	infix_left('<', 40)
+	infix_left('<=', 40)
+	infix_left('==', 40)
+	infix_left('!=', 40)
+	infix_left('>=', 40)
+	infix_left('+', 50)
+	infix_left('-', 50)
+	infix_left('*', 60)
+	infix_left('/', 60)
+	infix_left('%', 60)
 	symbol('literal')::nud = Proc.new do |node|
 		node
 	end
@@ -321,20 +275,20 @@ class Parser
 		else
 			@token = @tokenizer.get_token
 			case @token::type
-				when 'operator'
+				when :Operator
 					nextnode = @@symtab[@token::value].clone #probably not the best way to do, maybe use metaprogramming
-				when 'number'
+				when :Number
 					nextnode = @@symtab['literal'].clone
 					nextnode::left = @token::value.to_i
-				when 'string'
+				when :String
 					nextnode = @@symtab['literal'].clone
 					nextnode::left = @token::value
-				when 'name'
+				when :Name
 					nextnode = @@symtab['name'].clone
 					nextnode::left = @token::value
-				when 'keyword'
+				when :Keyword
 					nextnode = @@symtab[@token::value].clone
-				when 'end'
+				when :End
 					nextnode = @@symtab['end'].clone
 			end
 #			if @sav == @node #When we need to get a new token/node, which is most of the time
@@ -352,19 +306,25 @@ class Parser
 	def expression(rbp)
 		@sav = @node
 		expect
-		left = @sav::nud.call(@sav)
+		left = @sav::nud.call(@sav, self)
 		while rbp < @node.lbp
 			@sav = @node
  			expect
-			left = @sav::led.call(@sav, left)
+			left = @sav::led.call(@sav, left, self)
 		end
 		left
 	end
 	
 	def statement
-		expect
-		case @node
-			when ''
-		end
+		@sav = expect
+		expression(0)
 	end
+end
+
+$live = true
+puts "q to exit\n"
+p = Parser.new($stdin)
+while (c = gets) and (c != "q")
+	$stdin.ungetc(c)
+	puts p.statement
 end

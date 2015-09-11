@@ -1,0 +1,39 @@
+CixParser lexing state machine
+States: Start: Before the lexer has taken anything in
+		Error: Moved to when there is no rule for the current state and input character
+		OneCharacterOp: For characters that are unamibguously 1-char operators
+		OneCharacterOrEqualityOp: For characters that are either 1-char operators, or the start of a comparison or compound assignment operator
+		TwoCharacterOp: For the rest of the 2-char operators
+		Plus: Handled separately because + can lead to ++ as well as +=
+		Minus: Likewise, but Plus and Minus are separate because - can lead to ->
+		And: Likewise
+		Or: Likewise
+		LeftArrow: Likewise
+		RightArrow: Likewise
+		EqualityOp: For any assignment operator or <= or >=
+..
+1ch operators: ~ ! % ^ & * ( ) - + = [ ] { } ; , . < > / 
+2ch operators: != %= ^= &= && *= -= += == |= || << <= >> >= /= ++ --
+State + "~ ( ) [ ] { } ; , ." -> 1co
+State + '=' -> EqualityOp
+State + "! % ^ * /" -> OneCharacterOrEqualityOp
+State + "+" -> Plus
+State + '-' -> Minus
+State + '&' -> And
+State + '|' -> Or
+State + '<' -> LeftArrow
+State + '>' -> RightArrow
+Plus + '+' -> TwoCharacterOp
+Plus + '=' -> EqualityOp
+Minus + '-' -> TwoCharacterOp
+Minus + '=' -> EqualityOp
+Minus + '>' -> TwoCharacterOp
+And + '&' -> TwoCharacterOp
+And + '=' -> EqualityOp
+Or + '|' -> TwoCharacterOp
+Or + '=' -> EqualityOp
+LeftArrow + '<' -> TwoCharacterOp
+LeftArrow + '=' -> EqualityOp
+RightArrow + '>' -> TwoCharacterOp
+RightArrow + '=' -> EqualityOp
+OneCharacterOrEqualityOp + '=' -> EqualityOp
