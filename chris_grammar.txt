@@ -1,0 +1,60 @@
+Cix Grammar EBNFish
+adapted from Celarix\Cix\Grammar.txt
+newline = "\r" | "\n" "\r\n"
+whitespace = " " | "\t"
+blank = (whitespace | newline)
+decimal-numeric-constant = '0'|'1'|'2'|'3'|'4'|'5'|'6'|'7'|'8'|'9'
+numeric-literal = decimal-numeric-constant ('u' 'ul' 'f' 'd')?
+string-literal = '"' string-literal-character* '"'
+string-literal-character = /[^\\]/ | meta
+meta = '\' ('\'  | '"' | /u([0-9A-F]){4}/i | 't' | 'r' | 'a' | 'f' | 'n' | 'b' | 'v')
+hexadecimal-digit = decimal-numeric-constant | 'A' | 'a' | 'B' | 'b' | 'C' | 'c'  | 'D' | 'd' | 'E' | 'e' | 'F' | 'f'
+identifier = /[A-Za-z_][A-Za-z0-9_]*/ #excuse regex
+open-scope = '{'
+close-scope = '}'
+preprocessor-directive = '#' ('define' | 'undefine' | 'ifdef' | 'ifndef' | 'else' | 'endif' | 'include')
+whitespace+ (identifier | compile-time-substitution | local-include-path | global-include-path)
+compile-time-substitution = identifier whitespace+ /[A-Za-z0-9_]+/
+local-include-path = '"' /[A-Za-z0-9_:/.-()!#$%^&*+=,]/ '"'
+global-include-path = '<' /[A-Za-z0-9_:/.-()!#$%^&*+=,]/ '>'
+structure-declaration = 'struct' whitespace+ identifier blank* open-scope blank*
+structure-member-declaration+ blank* close-scope newline+
+structure-member-declaration = identifier '*'* identifier structure-member-offset? ';' blank+
+structure-member-offset = '@' whitespace+ decimal-numeric-constant
+function = function-declaration blank* open-scope statement* blank* close-scope blank*
+function-declaration = identifer '*'* blank+ identifier blank* '(' function-parameter-list? blank* ')'
+function-parameter-list = function-parameter (',' blank* function-parameter)* '...'?
+function-parameter = identifier '*'* blank+ identifier
+statement = ( open-scope | close-scope | single-statement | variable-declaration | variable-declaration-initalization 
+			| expression | conditional-if | conditional-elseif | conditional-else | loop-for | loop-while | loop-do 
+			| goto #check | switch) blank*
+single-statement = 'break' | 'continue'
+variable = ...
+variable-declaration = ('const' | 'register')? blank+ identifier '*'* blank+ identifier ';'
+variable-declaration-initialization = ('register')? blank+ identifier '*'* blank+ identifier blank+ '=' expression ';'
+expression = variable assignment-operator expression | conjunction (blank* '||' blank* conjunction)
+assignment-operator = ('+' | '-' | '*' | '/' | '%' | '<<' | '>>' | '&' | '|' | '^')? '='
+conjunction = or (blank* '&&' blank* or)*
+or = xor (blank* '|' blank* xor)*
+xor = and (blank* '^' blank* and)*
+and = eq (blank* '&' blank* eq)*
+eq = comp (blank* ('==' | '!=') blank* comp)*
+comp = shift (blank* ('<' | '<=' | '>=' | '>') blank* shift)*
+shift = sum (blank* ('<<' | '>>') blank* sum)*
+sum = product (blank* ('+' | '-') blank* product)*
+product = unary-lower (blank* ('*' | '/' | '%') blank* unary-lower)*
+unary-prefix = (('++' | '--' | '+' | '-' | '!' | '~') blank* identifier|numeric-literal postfix-operator?) |
+               ('*' | '&' identifier postfix-operator?)
+postfix-operator = '++' | '--' | ('.' identifier)+ | ('->' identifier)+ |
+                   ('(' function-parameter (',' blank* function-parameter)* ')') | ('[' identifier|numeric-literal ']')+
+conditional-if = 'if' blank* '(' blank* (expression-literal expression-variable expression) ')' blank* 
+                 open-scope statement* close-scope
+conditional-elseif = 'else' blank+ conditional-if
+conditional-else = 'else' blank* open-scope statement* close-scope
+loop-for = 'for' blank* '(' blank* (variable-declaration-initialization | expression) ';' blank* expression ';' blank* expression ')'
+           blank* open-scope statement* close-scope
+loop-while = 'while' blank* '(' expression ')' blank* open-scope statement* close-scope
+loop-do = 'do' blank* open-scope statement* close-scope blank* '(' blank* expression blank* ')'
+switch = 'switch' blank* open-scope switch-statement* switch-default-statement? close-scope
+switch-statement = 'case' blank+ expression-literal ':' blank+ statement*
+switch-default-statement = 'default' ':' blank* statement*

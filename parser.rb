@@ -2,6 +2,12 @@
 # This parser is a reworked version of what I did for my previous unnamed language, which is an implementation (rip-off)
 # of the TDOP parsing algorithm (http://javascript.crockford.com/tdop/tdop.html)
 
+# Token types
+Name_T = 0
+Numeric_T = 1
+String_T = 2
+Operator_T = 3
+
 class Token
 	attr_accessor :type, :value
 	def initialize
@@ -11,8 +17,7 @@ class Token
 end
 
 
-class Lexer
-	
+class Lexer	
 	# _srcfile: An open IO object, which is either a file or stdin.
 	def initialize(_srcfile)
 		@srcfile = _srcfile
@@ -26,43 +31,112 @@ class Lexer
 		@tok_start = 0
 	end
 	
+	def skip_whitespace
+		
+	end
+	
+	def parse_number
+		numeric_t = Token.new
+		numeric_t::type = Numeric_T
+		number_string = ""
+		while ('0'..'9') === @src[@lineno][@linepos]
+			number_string += @src[@lineno][@linepos]
+			@linepos+=1
+		end
+		numeric_t::value = number_string.to_i
+		case @src[@lineno][@linepos]
+		when 'u' then
+			if @src[@lineno][@linepos] == 'l'
+				@linepos+=2
+			else
+				@linepos+=1
+			end
+			puts "Warning: numeric type suffixes not yet supported"
+		when 'f' then
+			@linepos+=1
+			puts "Warning: numeric type suffixes not yet supported"
+		when 'd' then
+			@linepos+=1
+			puts "Warning: numeric type suffixes not yet supported"
+		end
+		return numeric_t
+	end
+	
+	def parse_name
+	
+	end
+	
+	def parse_operator
+	
+	end
+	
+	def parse_string
+		string_t = Token.new
+		string_t::type = String_T
+		string_t::value = ""
+		special_char_map = "\a\b\f\n\r\t\v".codepoints #for definite values!
+		@linepos+=1
+		while (@src[@lineno][@linepos] && @src[@lineno][@linepos] != '"')
+			if @src[@lineno][@linepos] == '\\'
+				@linepos+=1
+				if (@src[@lineno][@linepos] == '\\') || (@src[@lineno][@linepos] == '"')
+					string_t::value += @src[@lineno][@linepos] 
+				elsif (@src[@lineno][@linepos] == 'a')
+					string_t::value += special_char_map[0].chr
+				elsif (@src[@lineno][@linepos] == 'b')
+					string_t::value += special_char_map[1].chr
+			  elsif (@src[@lineno][@linepos] == 'f')
+					string_t::value += special_char_map[2].chr
+				elsif (@src[@lineno][@linepos] == 'n')
+					string_t::value += special_char_map[3].chr
+				elsif (@src[@lineno][@linepos] == 'r')
+					string_t::value += special_char_map[4].chr
+				elsif (@src[@lineno][@linepos] == 't')
+					string_t::value += special_char_map[5].chr
+				elsif (@src[@lineno][@linepos] == 'v')
+					string_t::value += special_char_map[6].chr
+				elsif ((@src[@lineno][@linepos]) == 'U' ||
+				       (@src[@lineno][@linepos]) == 'u')
+					puts "Warning: Unicode strings not yet supported, at line #{@lineno + 1}"
+					@linepos+=4
+				end
+			elsif (@src[@lineno][@linepos] >= "\x20" &&
+			       @src[@lineno][@linepos] <= "\x7F")
+				string_t::value += @src[@lineno][@linepos]
+			else
+				puts "Warning: non-ASCII and special characters will be ignored, at line #{@lineno + 1}"
+			end
+			@linepos+=1
+		end
+		@linepos+=1 #to get past end quote
+		return string_t
+	end
+	
 	# Builds the next token from the input stream.
 	def get_token
 		t = Token.new
-		while (@src[@lineno][@linepos] == ' ') ||
-		      (@src[@lineno][@linepos] == '\t') ||
-					(@src[@lineno][@linepos] == '\r') ||
-					(@src[@lineno][@linepos] == '\n')
-		@linepos+=1
-		end
-		@tok_start = @linepos
-		# @linepos has already been set to point to the next token
 		case @src[@lineno][@linepos]
-			when /[0-9]+/
-				t::type = :Number
-				/(?<number_value>[0-9]+)/ =~ @src[@lineno][@linepos..-1]
-				t::value = number_value
-				@linepos += number_value.length
-			when /[A-Za-z_]/
-				t::type = :Name
-				/(?<name_value>[A-Za-z_]+)/ =~ @src[@lineno][@linepos..-1]
-				t::value = name_value
-				@linepos += name_value.length
-			when /[\+\-\*\/]/ # operators
-				t::type = :Operator
-				t::value = @src[@lineno][@linepos]
-				@linepos+=1
-			when nil # EOL/F
-				if $live
-					@src << @srcfile.readline.chomp # fix later
-				end
-				@lineno+=1
-				@linepos = @tok_start = 0
-				t::type = :End
-			else
-				raise "Bad input '#{ @src[@lineno][@linepos] }' at line #{ @lineno }, column #{ @linepos }\n"
+			when ' ' then
+				skip_whitespace
+			when '\f' then #less likely to see this
+				skip_whitespace
+			when '\t' then
+				skip_whitespace
+			when '\v' then
+				skip_whitespace
+			when '0'..'9' then
+				t = parse_number
+			when 'A-Z' then
+				t = parse_name
+			when 'a-z' then
+				parse_name
+			when '_' then
+				t = parse_name
+			when /[~!$%\^&*()-+=|{}\[\]\:;\/?<>,.]/ then #very much check
+				t = parse_operator
+			when '"' then
+				t = parse_string
 		end
-		return t
 	end
 end
 
@@ -322,9 +396,11 @@ class Parser
 end
 
 $live = true
-puts "q to exit\n"
-p = Parser.new($stdin)
-while (c = gets) and (c != "q")
-	$stdin.ungetc(c)
-	puts p.statement
-end
+l = Lexer.new($stdin)
+l.get_token
+#puts "q to exit\n"
+#p = Parser.new($stdin)
+#while (c = gets) and (c != "q")
+#	$stdin.ungetc(c)
+#	puts p.statement
+#end
